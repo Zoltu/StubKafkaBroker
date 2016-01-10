@@ -1,5 +1,6 @@
 package com.zoltu
 
+import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import java.util.Properties
@@ -58,6 +59,30 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 					val topics = kafkaConsumer.listTopics()
 
 					assert(topics.size == 0)
+				}
+			}
+		}
+
+		given("a stub kafka server with a down broker primed and a topic primed with the down broker as primary") {
+			val stubKafkaServer = StubKafkaServer()
+			val downBroker = BrokerEndPoint(1, "somewhere", 1234)
+			stubKafkaServer.addBroker(downBroker)
+			stubKafkaServer.addTopic(StubKafkaServer.Topic("my topic", arrayOf(StubKafkaServer.Partition(1, downBroker, emptyArray(), emptyArray()))))
+
+			on("list topics multiple times") {
+				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaServer.thisBroker.port())
+				val topics = kafkaConsumer.listTopics()
+
+				it("should get the topic with the down broker as leader") {
+					assertEquals(1, topics.size)
+					val topic = topics.entries.single()
+					assertEquals("my topic", topic.key)
+					assertEquals(1, topic.value.size)
+					val partition = topic.value.single()
+					val leader = partition.leader()
+					assertEquals(1, leader.id())
+					assertEquals("somewhere", leader.host())
+					assertEquals(1234, leader.port())
 				}
 			}
 		}
