@@ -44,13 +44,16 @@ class StubKafkaServer {
 		clearTopics()
 	}
 
-	fun addBroker(broker: BrokerEndPoint) = { brokers = brokers.plus(broker) }
+	fun addBroker(broker: BrokerEndPoint) {
+		brokers += broker
+	}
+
 	fun clearBrokers() {
 		brokers = setOf(thisBroker)
 	}
 
 	fun addTopic(topic: Topic) {
-		topics = topics.plus(topic)
+		topics += topic
 	}
 
 	fun clearTopics() {
