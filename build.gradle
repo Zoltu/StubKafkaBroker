@@ -1,0 +1,37 @@
+group 'com.zoltu'
+version '1.0.0'
+
+buildscript {
+	repositories {
+		mavenCentral()
+	}
+
+	dependencies {
+		classpath(group: 'org.jetbrains.kotlin', name: 'kotlin-gradle-plugin', version: '1.0.0-beta-4584')
+	}
+}
+
+apply plugin: 'kotlin'
+
+repositories {
+	mavenCentral()
+	maven {
+		url('http://repository.jetbrains.com/all')
+	}
+}
+
+// kotlin annotation processor settings, necessary for dagger
+kapt {
+	generateStubs = true
+}
+dependencies {
+	kapt(group: 'com.google.dagger', name: 'dagger-compiler', version: '2.0.2')
+
+	compile(group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '1.0.0-beta-4584')
+	compile(group: 'com.google.dagger', name: 'dagger', version: '2.0.2')
+	compile(group: 'org.apache.kafka', name: 'kafka_2.11', version: '0.9.0.0')
+
+	testCompile(group: 'junit', name: 'junit', version: '4.12')
+	testCompile(group: 'org.jetbrains.spek', name: 'spek', version: '0.1.188')
+	testCompile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.9.0.0')
+}
