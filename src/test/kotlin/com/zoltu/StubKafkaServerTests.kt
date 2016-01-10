@@ -66,10 +66,10 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 	fun getDefaultProperties(port: Int): Properties {
 		val properties = Properties()
 		properties.put("bootstrap.servers", "localhost:$port")
-		properties.put("heartbeat.interval.ms", 1000)
-		properties.put("fetch.max.wait.ms", 5000)
-		properties.put("session.timeout.ms", 5000)
-		properties.put("request.timeout.ms", 10000)
+		properties.put("heartbeat.interval.ms", 100)
+		properties.put("fetch.max.wait.ms", 500)
+		properties.put("session.timeout.ms", 500)
+		properties.put("request.timeout.ms", 1000)
 		return properties
 	}
 
