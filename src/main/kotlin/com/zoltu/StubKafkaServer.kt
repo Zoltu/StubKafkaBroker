@@ -45,9 +45,17 @@ class StubKafkaServer {
 	}
 
 	fun addBroker(broker: BrokerEndPoint) = { brokers = brokers.plus(broker) }
-	fun clearBrokers() { brokers = setOf(thisBroker) }
-	fun addTopic(topic: Topic) { topics = topics.plus(topic) }
-	fun clearTopics() { topics = emptySet() }
+	fun clearBrokers() {
+		brokers = setOf(thisBroker)
+	}
+
+	fun addTopic(topic: Topic) {
+		topics = topics.plus(topic)
+	}
+
+	fun clearTopics() {
+		topics = emptySet()
+	}
 
 	private fun processRequest(byteBuffer: ByteBuffer): ByteBuffer {
 		val requestHeader = RequestHeader.parse(byteBuffer)
@@ -61,19 +69,19 @@ class StubKafkaServer {
 		}
 	}
 
-	data class Topic(val topicName: String, val partitions: Sequence<Partition>) {
+	data class Topic(val topicName: String, val partitions: Array<Partition>) {
 		fun toTopicMetadata(): TopicMetadata = TopicMetadata(topicName, partitions.map { it.toPartitionMetadata() }.toScalaSeq(), 0)
 
 		companion object Factory {
-			fun createSimple(topicName: String, partitionLeader: BrokerEndPoint) = Topic(topicName, sequenceOf(Partition.createSimple(0, partitionLeader)))
+			fun createSimple(topicName: String, partitionLeader: BrokerEndPoint) = Topic(topicName, arrayOf(Partition.createSimple(0, partitionLeader)))
 		}
 	}
 
-	data class Partition(val id: Int, val leader: BrokerEndPoint?, val replicas: Sequence<BrokerEndPoint>, val inSyncReplicas: Sequence<BrokerEndPoint>) {
+	data class Partition(val id: Int, val leader: BrokerEndPoint?, val replicas: Array<BrokerEndPoint>, val inSyncReplicas: Array<BrokerEndPoint>) {
 		fun toPartitionMetadata(): PartitionMetadata = PartitionMetadata(id, Option.apply(leader), replicas.toScalaSeq(), inSyncReplicas.toScalaSeq(), 0)
 
 		companion object Factory {
-			fun createSimple(id: Int, leader: BrokerEndPoint) = Partition(id, leader, emptySequence(), emptySequence())
+			fun createSimple(id: Int, leader: BrokerEndPoint) = Partition(id, leader, emptyArray(), emptyArray())
 		}
 	}
 }
