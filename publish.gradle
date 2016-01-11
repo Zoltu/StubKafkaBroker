@@ -9,27 +9,12 @@ buildscript {
 
 apply plugin: com.jfrog.bintray.gradle.BintrayPlugin
 apply plugin: 'maven-publish'
-apply plugin: 'com.zoltu.versioning'
-
-group 'com.zoltu'
-version versionInfo.toString()
-
-jar {
-	manifest {
-		attributes(
-				"Implementation-Title": "StubKafkaBroker",
-				"Implementation-Vendor": "Zoltu",
-				"Implementation-Version": versionInfo.toString(),
-				"Implementation-Sha": versionInfo.sha,
-				"Specification-Version": "${versionInfo.major}.${versionInfo.minor}".toString(),
-		)
-	}
-}
 
 publishing {
 	publications {
 		MyMavenPublication(MavenPublication) {
 			from components.java
+			artifact sourceJar
 		}
 	}
 }

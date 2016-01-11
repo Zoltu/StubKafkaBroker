@@ -4,6 +4,7 @@ buildscript {
 }
 
 apply plugin: 'kotlin'
+apply from: 'package.gradle'
 apply from: 'publish.gradle'
 
 repositories {
