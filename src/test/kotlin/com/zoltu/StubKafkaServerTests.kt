@@ -3,8 +3,10 @@ package com.zoltu
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import java.time.Duration
 import java.util.Properties
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 	init {
@@ -86,11 +88,35 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 				}
 			}
 		}
+
+		given("a stub kafka broker with a delayed response to MetadataRequest and a stub broker with a fast response") {
+			val stubKafkaServerSlow = StubKafkaServer()
+			val stubKafkaServerFast = StubKafkaServer()
+			stubKafkaServerSlow.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServerFast.thisBroker))
+			stubKafkaServerFast.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServerSlow.thisBroker))
+			val defaultMetadataRequestHandler = stubKafkaServerSlow.metadataRequestHandler
+			stubKafkaServerSlow.metadataRequestHandler = { requestHeader, metadataRequest ->
+				Thread.sleep(Duration.ofMillis(1100).toMillis())
+				defaultMetadataRequestHandler(requestHeader, metadataRequest)
+			}
+
+			on("list topic") {
+				val properties = getDefaultProperties(0)
+				properties.put("bootstrap.servers", "localhost:${stubKafkaServerSlow.thisBroker.port()};localhost:${stubKafkaServerFast.thisBroker.port()}")
+				val kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
+				val topics = kafkaConsumer.listTopics()
+
+				it("should timeout") {
+					assertEquals("my topic", topics.entries.single().key)
+				}
+			}
+		}
 	}
 
 	fun getDefaultProperties(port: Int): Properties {
 		val properties = Properties()
 		properties.put("bootstrap.servers", "localhost:$port")
+		// we want our tests to fail fast
 		properties.put("heartbeat.interval.ms", 100)
 		properties.put("fetch.max.wait.ms", 500)
 		properties.put("session.timeout.ms", 500)
