@@ -8,7 +8,7 @@ A stub Kafka Broker that speaks the Kafka wire protocol.
 ### Gradle
 ```groovy
 repositories {
-	maven { url('https://dl.bintray.com/zoltu/maven/') }
+	jcenter()
 }
 dependencies {
 	compile(group: 'com.zoltu', name: 'StubKafkaBroker', version: '1.1.17')
@@ -20,9 +20,12 @@ dependencies {
 ```xml
 <repositories>
 	<repository>
-		<id>zoltu</id>
-		<name>Zoltu</name>
-		<url>https://dl.bintray.com/zoltu/maven/</url>
+		<snapshots>
+			<enabled>false</enabled>
+		</snapshots>
+		<id>central</id>
+		<name>bintray</name>
+		<url>http://jcenter.bintray.com</url>
 	</repository>
 </repositories>
 <dependency>
