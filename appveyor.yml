@@ -15,3 +15,5 @@ cache:
 
 environment:
   JAVA_HOME: C:\Program Files (x86)\Java\jdk1.8.0
+  BINTRAY_KEY:
+    secure: XjGE/fPz6mSnyQqcz0RUs7VfSdM9sLg6gG2CqjwDPS2Zu/A0fbeJVCkWdflQXc/w

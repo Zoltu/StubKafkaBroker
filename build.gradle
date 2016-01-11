@@ -17,7 +17,7 @@ apply plugin: 'kotlin'
 apply plugin: 'maven-publish'
 
 bintray {
-	user = System.getenv('BINTRAY_USER')
+	user = 'zoltu'
 	key = System.getenv('BINTRAY_KEY')
 	publications = ['MyMavenPublication']
 	publish = true
