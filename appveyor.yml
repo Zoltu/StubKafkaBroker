@@ -1,3 +1,6 @@
+cache:
+  - C:\Users\appveyor\.gradle -> build.gradle
+
 build:
   verbosity: detailed
 
@@ -7,11 +10,11 @@ build_script:
 test_script:
   - gradlew.bat check --info --no-daemon
 
+artifacts:
+  - path: build\libs\**.jar
+
 deploy_script:
   - gradlew.bat bintrayUpload
-
-cache:
-  - C:\Users\appveyor\.gradle
 
 environment:
   JAVA_HOME: C:\Program Files (x86)\Java\jdk1.8.0
