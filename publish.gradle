@@ -1,0 +1,46 @@
+buildscript {
+	repositories {
+		jcenter()
+	}
+	dependencies {
+		classpath(group: 'com.jfrog.bintray.gradle', name: 'gradle-bintray-plugin', version: '1.5')
+	}
+}
+
+apply plugin: com.jfrog.bintray.gradle.BintrayPlugin
+apply plugin: 'maven-publish'
+apply plugin: 'com.zoltu.versioning'
+
+group 'com.zoltu'
+version versionInfo.toString()
+
+jar {
+	manifest {
+		attributes(
+				"Implementation-Title": "StubKafkaBroker",
+				"Implementation-Vendor": "Zoltu",
+				"Implementation-Version": versionInfo.toString(),
+				"Implementation-Sha": versionInfo.sha,
+				"Specification-Version": "${versionInfo.major}.${versionInfo.minor}".toString(),
+		)
+	}
+}
+
+publishing {
+	publications {
+		MyMavenPublication(MavenPublication) {
+			from components.java
+		}
+	}
+}
+
+bintray {
+	user = 'zoltu'
+	key = System.getenv('BINTRAY_KEY')
+	publications = ['MyMavenPublication']
+	publish = true
+	pkg {
+		repo = 'maven'
+		name = 'StubKafkaBroker'
+	}
+}

@@ -1,39 +1,10 @@
 buildscript {
-	repositories {
-		mavenCentral()
-	}
-
-	dependencies {
-		classpath(group: 'org.jetbrains.kotlin', name: 'kotlin-gradle-plugin', version: '1.0.0-beta-4584')
-		classpath(group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.1.1.201511131810-r')
-	}
-}
-
-plugins {
-	id 'com.jfrog.bintray' version '1.5'
+	repositories { mavenCentral() }
+	dependencies { classpath(group: 'org.jetbrains.kotlin', name: 'kotlin-gradle-plugin', version: '1.0.0-beta-4584') }
 }
 
 apply plugin: 'kotlin'
-apply plugin: 'maven-publish'
-
-bintray {
-	user = 'zoltu'
-	key = System.getenv('BINTRAY_KEY')
-	publications = ['MyMavenPublication']
-	publish = true
-	pkg {
-		repo = 'maven'
-		name = 'StubKafkaBroker'
-	}
-}
-
-publishing {
-	publications {
-		MyMavenPublication(MavenPublication) {
-			from components.java
-		}
-	}
-}
+apply from: 'publish.gradle'
 
 repositories {
 	mavenCentral()
@@ -49,44 +20,4 @@ dependencies {
 	testCompile(group: 'junit', name: 'junit', version: '4.12')
 	testCompile(group: 'org.jetbrains.spek', name: 'spek', version: '0.1.188')
 	testCompile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.9.0.0')
-}
-
-group 'com.zoltu'
-version getVersion()
-
-jar {
-	manifest {
-		attributes(
-				"Implementation-Title": "StubKafkaBroker",
-				"Implementation-Vendor": "Zoltu",
-				"Implementation-Version": version,
-				"Implementation-Sha": getVersionInfo().sha,
-				"Specification-Version": "${getVersionInfo().major}.${getVersionInfo().minor}".toString(),
-		)
-	}
-}
-
-import org.eclipse.jgit.api.Git
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder
-
-import java.util.regex.Matcher
-
-class VersionInfo {
-	String major
-	String minor
-	String patch
-	String sha
-}
-
-VersionInfo getVersionInfo() {
-	def repository = new FileRepositoryBuilder().findGitDir(project.rootDir).build()
-	def git = Git.wrap(repository)
-	def describeResults = git.describe().setLong(true).call()
-	Matcher matcher = describeResults =~ /v([0-9]+)\.([0-9]+)\-([0-9]+)\-g(.*)/
-	matcher.find()
-	return  new VersionInfo(major: matcher.group(1), minor: matcher.group(2), patch: matcher.group(3), sha: matcher.group(4))
-}
-
-String getVersion() {
-	return "${versionInfo.major}.${versionInfo.minor}.${versionInfo.patch}".toString()
 }

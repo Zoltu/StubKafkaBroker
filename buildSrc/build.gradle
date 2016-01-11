@@ -1,0 +1,8 @@
+apply plugin: 'groovy'
+
+repositories {
+	mavenCentral()
+}
+dependencies {
+	compile(group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.1.1.201511131810-r')
+}
