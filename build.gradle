@@ -38,9 +38,8 @@ publishing {
 repositories {
 	mavenCentral()
 	jcenter()
-	maven {
-		url('http://repository.jetbrains.com/all')
-	}
+	maven { url('http://repository.jetbrains.com/all') }
+	maven { url('https://dl.bintray.com/zoltu/maven/') }
 }
 
 dependencies {
