@@ -1,5 +1,5 @@
 cache:
-  - C:\Users\appveyor\.gradle -> *.gradle
+  - C:\Users\appveyor\.gradle -> **\*.gradle
 
 build:
   verbosity: detailed
