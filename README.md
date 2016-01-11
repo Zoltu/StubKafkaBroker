@@ -6,13 +6,30 @@ A stub Kafka Broker that speaks the Kafka wire protocol.
 
 ## Usage
 ### Gradle
-```
+```groovy
 repositories {
 	maven { url('https://dl.bintray.com/zoltu/maven/') }
 }
 dependencies {
-	compile(group: 'com.zoltu', name: 'StubKafkaBroker', version: '1.1.13')
+	compile(group: 'com.zoltu', name: 'StubKafkaBroker', version: '1.1.17')
 }
+```
+*Note: You probably want to replace the version listed here with the latest version shown in the Build Status badge at the top of this readme.*
+
+### Maven
+```xml
+<repositories>
+	<repository>
+		<id>zoltu</id>
+		<name>Zoltu</name>
+		<url>https://dl.bintray.com/zoltu/maven/</url>
+	</repository>
+</repositories>
+<dependency>
+	<groupId>com.zoltu</groupId>
+	<artifactId>StubKafkaBroker</artifactId>
+	<version>1.1.17</version>
+</dependency>
 ```
 *Note: You probably want to replace the version listed here with the latest version shown in the Build Status badge at the top of this readme.*
 
