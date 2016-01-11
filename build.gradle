@@ -9,10 +9,35 @@ buildscript {
 	}
 }
 
+plugins {
+	id 'com.jfrog.bintray' version '1.5'
+}
+
 apply plugin: 'kotlin'
+apply plugin: 'maven-publish'
+
+bintray {
+	user = System.getenv('BINTRAY_USER')
+	key = System.getenv('BINTRAY_KEY')
+	publications = ['MyMavenPublication']
+	publish = true
+	pkg {
+		repo = 'maven'
+		name = 'StubKafkaBroker'
+	}
+}
+
+publishing {
+	publications {
+		MyMavenPublication(MavenPublication) {
+			from components.java
+		}
+	}
+}
 
 repositories {
 	mavenCentral()
+	jcenter()
 	maven {
 		url('http://repository.jetbrains.com/all')
 	}
@@ -28,7 +53,7 @@ dependencies {
 }
 
 group 'com.zoltu'
-version getVersion(getVersionInfo())
+version getVersion()
 
 jar {
 	manifest {
@@ -63,6 +88,6 @@ VersionInfo getVersionInfo() {
 	return  new VersionInfo(major: matcher.group(1), minor: matcher.group(2), patch: matcher.group(3), sha: matcher.group(4))
 }
 
-String getVersion(VersionInfo versionInfo) {
+String getVersion() {
 	return "${versionInfo.major}.${versionInfo.minor}.${versionInfo.patch}".toString()
 }

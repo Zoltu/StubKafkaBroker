@@ -1,0 +1,17 @@
+build:
+  verbosity: detailed
+
+build_script:
+  - gradlew.bat jar --info --no-daemon
+
+test_script:
+  - gradlew.bat check --info --no-daemon
+
+deploy_script:
+  - gradlew.bat bintrayUpload
+
+cache:
+  - C:\Users\appveyor\.gradle
+
+environment:
+  JAVA_HOME: C:\Program Files (x86)\Java\jdk1.8.0
