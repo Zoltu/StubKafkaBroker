@@ -3,3 +3,57 @@
 
 # StubKafkaBroker
 A stub Kafka Broker that speaks the Kafka wire protocol.
+
+## Usage
+### Gradle
+```
+repositories {
+	maven { url('https://dl.bintray.com/zoltu/maven/') }
+}
+dependencies {
+	compile(group: 'com.zoltu', name: 'StubKafkaBroker', version: '1.1.13')
+}
+```
+*Note: You probably want to replace the version listed here with the latest version shown in the Build Status badge at the top of this readme.*
+
+### Java
+TODO: It is basically the same as Kotlin but more verbose
+
+### Kotlin
+```kotlin
+// instatiate the server, this will start up the server and cause it to start listening on a random open port
+val stubKafkaServer = StubKafkaServer()
+
+// you can find out what port the server is listening on once it is created
+val port = stubKafkaServer.thisBroker.port()
+
+// adding a topic will cause the default request handlers that respond with topic information to have this topic (like MetadataRequest)
+stubKafkaServer.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServer.thisBroker))
+
+// create a new Kafka Consumer (using off-the-shelf Kafka client library)
+val properties = Properties()
+properties.put("bootstrap.servers", "localhost:$port")
+val kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
+
+// our kafka consumer can now make requests of the broker that we mocked out
+val topics = kafkaConsumer.listTopics()
+assertEquals("my topic", topics.entries.single().key)
+
+// more interesting would be seeing what happens if the broker takes a long time to respond
+val defaultMetadataRequestHandler = stubKafkaServer.metadataRequestHandler
+stubKafkaServer.metadataRequestHandler = { requestHeader, metadataRequest ->
+	Thread.sleep(Duration.ofMinutes(1).toMillis())
+	defaultMetadataRequestHandler(requestHeader, metadataRequest)
+}
+// the following causes the 0.9.0 Kafka Client to block forever since it refuses to do anything until it gets metadata and every metadata request will timeout (default timeout is 40 seconds)
+// topics = kafkaConsumer.listTopics()
+
+// try again with multiple brokers
+val stubKafkaServerFast = StubKafkaServer()
+stubKafkaServerFast.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServerSlow.thisBroker))
+properties.put("bootstrap.servers", "localhost:${stubKafkaServer.thisBroker.port()};localhost:${stubKafkaServerFast.thisBroker.port()}")
+kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
+// does not block, since the fast broker will respond rather quickly
+val topics = kafkaConsumer.listTopics()
+assertEquals("my topic", topics.entries.single().key)
+```
