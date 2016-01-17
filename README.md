@@ -42,13 +42,13 @@ TODO: It is basically the same as Kotlin but more verbose
 ### Kotlin
 ```kotlin
 // instatiate the server, this will start up the server and cause it to start listening on a random open port
-val stubKafkaServer = StubKafkaServer()
+val stubKafkaBroker = StubKafkaBroker()
 
 // you can find out what port the server is listening on once it is created
-val port = stubKafkaServer.thisBroker.port()
+val port = stubKafkaBroker.thisBroker.port()
 
 // adding a topic will cause the default request handlers that respond with topic information to have this topic (like MetadataRequest)
-stubKafkaServer.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServer.thisBroker))
+stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
 
 // create a new Kafka Consumer (using off-the-shelf Kafka client library)
 val properties = Properties()
@@ -60,8 +60,8 @@ val topics = kafkaConsumer.listTopics()
 assertEquals("my topic", topics.entries.single().key)
 
 // more interesting would be seeing what happens if the broker takes a long time to respond
-val defaultMetadataRequestHandler = stubKafkaServer.metadataRequestHandler
-stubKafkaServer.metadataRequestHandler = { requestHeader, metadataRequest ->
+val defaultMetadataRequestHandler = stubKafkaBroker.metadataRequestHandler
+stubKafkaBroker.metadataRequestHandler = { requestHeader, metadataRequest ->
 	Thread.sleep(Duration.ofMinutes(1).toMillis())
 	defaultMetadataRequestHandler(requestHeader, metadataRequest)
 }
@@ -69,9 +69,9 @@ stubKafkaServer.metadataRequestHandler = { requestHeader, metadataRequest ->
 // topics = kafkaConsumer.listTopics()
 
 // try again with multiple brokers
-val stubKafkaServerFast = StubKafkaServer()
-stubKafkaServerFast.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServerSlow.thisBroker))
-properties.put("bootstrap.servers", "localhost:${stubKafkaServer.thisBroker.port()};localhost:${stubKafkaServerFast.thisBroker.port()}")
+val stubKafkaBrokerFast = StubKafkaBroker()
+stubKafkaBrokerFast.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBrokerSlow.thisBroker))
+properties.put("bootstrap.servers", "localhost:${stubKafkaBroker.thisBroker.port()};localhost:${stubKafkaBrokerFast.thisBroker.port()}")
 kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
 // does not block, since the fast broker will respond rather quickly
 val topics = kafkaConsumer.listTopics()

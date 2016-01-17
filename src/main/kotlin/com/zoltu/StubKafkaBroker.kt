@@ -1,11 +1,15 @@
 package com.zoltu
 
 import com.zoltu.extensions.toByteBuffer
+import com.zoltu.extensions.toScalaMap
 import com.zoltu.extensions.toScalaSeq
 import kafka.api.PartitionMetadata
+import kafka.api.ProducerResponse
+import kafka.api.ProducerResponseStatus
 import kafka.api.TopicMetadata
 import kafka.api.TopicMetadataResponse
 import kafka.cluster.BrokerEndPoint
+import kafka.common.TopicAndPartition
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.requests.ControlledShutdownRequest
 import org.apache.kafka.common.requests.DescribeGroupsRequest
@@ -28,11 +32,16 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest
 import scala.Option
 import java.nio.ByteBuffer
 
-class StubKafkaServer {
+class StubKafkaBroker {
 	val thisBroker: BrokerEndPoint get() = BrokerEndPoint(0, lengthPrefixedMessageServer.host, lengthPrefixedMessageServer.port)
 
 	var metadataRequestHandler: (RequestHeader, MetadataRequest) -> TopicMetadataResponse = { requestHeader, metadataRequest ->
 		TopicMetadataResponse(brokers.toScalaSeq(), topics.map { it.toTopicMetadata() }.toScalaSeq(), requestHeader.correlationId())
+	}
+
+	var produceRequestHandler: (RequestHeader, ProduceRequest) -> ProducerResponse = { requestHeader, produceRequest ->
+		// TODO: keep track of all produced messages so tests can assert on them
+		ProducerResponse(requestHeader.correlationId(), mapOf<TopicAndPartition, ProducerResponseStatus>().toScalaMap(), requestHeader.apiVersion().toInt(), 0)
 	}
 
 	private val lengthPrefixedMessageServer = LengthPrefixedMessageServer { processRequest(it) }
@@ -65,7 +74,8 @@ class StubKafkaServer {
 		val requestBody = AbstractRequest.getRequest(requestHeader.apiKey().toInt(), requestHeader.apiVersion().toInt(), byteBuffer)
 		when (requestBody ) {
 			is MetadataRequest -> return metadataRequestHandler(requestHeader, requestBody).toByteBuffer()
-			is ProduceRequest, is FetchRequest, is ListOffsetRequest, is LeaderAndIsrRequest, is StopReplicaRequest, is ControlledShutdownRequest, is UpdateMetadataRequest, is OffsetCommitRequest, is OffsetFetchRequest, is GroupCoordinatorRequest, is JoinGroupRequest, is HeartbeatRequest, is LeaveGroupRequest, is SyncGroupRequest, is DescribeGroupsRequest, is ListGroupsRequest -> {
+			is ProduceRequest -> return produceRequestHandler(requestHeader, requestBody).toByteBuffer()
+			is FetchRequest, is ListOffsetRequest, is LeaderAndIsrRequest, is StopReplicaRequest, is ControlledShutdownRequest, is UpdateMetadataRequest, is OffsetCommitRequest, is OffsetFetchRequest, is GroupCoordinatorRequest, is JoinGroupRequest, is HeartbeatRequest, is LeaveGroupRequest, is SyncGroupRequest, is DescribeGroupsRequest, is ListGroupsRequest -> {
 				throw UnsupportedOperationException("Unhandled request type.")
 			}
 			else -> throw UnsupportedOperationException("Unhandled request type.")

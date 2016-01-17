@@ -3,18 +3,18 @@ package com.zoltu
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.jetbrains.spek.api.Spek
 import java.time.Duration
 import java.util.Properties
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 
-class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
+class TopicMetadataTests : Spek() {
 	init {
 		given ("a stub kafka server with no priming") {
-			val stubKafkaServer = StubKafkaServer()
+			val stubKafkaBroker = StubKafkaBroker()
 
 			on ("connect and list topics") {
-				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaServer.thisBroker.port())
+				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 				val topics = kafkaConsumer.listTopics()
 
 				it ("should return no topics") {
@@ -23,7 +23,7 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 			}
 
 			on("connect and list topics twice") {
-				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaServer.thisBroker.port())
+				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 				val topics1 = kafkaConsumer.listTopics()
 				val topics2 = kafkaConsumer.listTopics()
 
@@ -35,12 +35,12 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 		}
 
 		given("a stub kafka server primed with one topic") {
-			val stubKafkaServer = StubKafkaServer()
-			stubKafkaServer.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServer.thisBroker))
+			val stubKafkaBroker = StubKafkaBroker()
+			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
 
 			on("list topics") {
 				//val kafkaConsumer = getDefaultKafkaConsumer(9092)
-				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaServer.thisBroker.port())
+				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 				val topics = kafkaConsumer.listTopics()
 
 				it("should get the topic") {
@@ -50,14 +50,14 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 		}
 
 		given("a stub kafka server primed with one topic") {
-			val stubKafkaServer = StubKafkaServer()
-			stubKafkaServer.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServer.thisBroker))
+			val stubKafkaBroker = StubKafkaBroker()
+			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
 
 			on("reset") {
-				stubKafkaServer.reset()
+				stubKafkaBroker.reset()
 
 				it("forgets the topic") {
-					val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaServer.thisBroker.port())
+					val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 					val topics = kafkaConsumer.listTopics()
 
 					assert(topics.size == 0)
@@ -66,13 +66,13 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 		}
 
 		given("a stub kafka server with a down broker primed and a topic primed with the down broker as primary") {
-			val stubKafkaServer = StubKafkaServer()
+			val stubKafkaBroker = StubKafkaBroker()
 			val downBroker = BrokerEndPoint(1, "somewhere", 1234)
-			stubKafkaServer.addBroker(downBroker)
-			stubKafkaServer.addTopic(StubKafkaServer.Topic("my topic", arrayOf(StubKafkaServer.Partition(1, downBroker, emptyArray(), emptyArray()))))
+			stubKafkaBroker.addBroker(downBroker)
+			stubKafkaBroker.addTopic(StubKafkaBroker.Topic("my topic", arrayOf(StubKafkaBroker.Partition(1, downBroker, emptyArray(), emptyArray()))))
 
 			on("list topics multiple times") {
-				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaServer.thisBroker.port())
+				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 				val topics = kafkaConsumer.listTopics()
 
 				it("should get the topic with the down broker as leader") {
@@ -90,19 +90,19 @@ class StubKafkaServerTests : org.jetbrains.spek.api.Spek() {
 		}
 
 		given("a stub kafka broker with a delayed response to MetadataRequest and a stub broker with a fast response") {
-			val stubKafkaServerSlow = StubKafkaServer()
-			val stubKafkaServerFast = StubKafkaServer()
-			stubKafkaServerSlow.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServerFast.thisBroker))
-			stubKafkaServerFast.addTopic(StubKafkaServer.Topic.createSimple("my topic", stubKafkaServerSlow.thisBroker))
-			val defaultMetadataRequestHandler = stubKafkaServerSlow.metadataRequestHandler
-			stubKafkaServerSlow.metadataRequestHandler = { requestHeader, metadataRequest ->
+			val stubKafkaBrokerSlow = StubKafkaBroker()
+			val stubKafkaBrokerFast = StubKafkaBroker()
+			stubKafkaBrokerSlow.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBrokerFast.thisBroker))
+			stubKafkaBrokerFast.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBrokerSlow.thisBroker))
+			val defaultMetadataRequestHandler = stubKafkaBrokerSlow.metadataRequestHandler
+			stubKafkaBrokerSlow.metadataRequestHandler = { requestHeader, metadataRequest ->
 				Thread.sleep(Duration.ofMillis(1100).toMillis())
 				defaultMetadataRequestHandler(requestHeader, metadataRequest)
 			}
 
 			on("list topic") {
 				val properties = getDefaultProperties(0)
-				properties.put("bootstrap.servers", "localhost:${stubKafkaServerSlow.thisBroker.port()};localhost:${stubKafkaServerFast.thisBroker.port()}")
+				properties.put("bootstrap.servers", "localhost:${stubKafkaBrokerSlow.thisBroker.port()};localhost:${stubKafkaBrokerFast.thisBroker.port()}")
 				val kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
 				val topics = kafkaConsumer.listTopics()
 
