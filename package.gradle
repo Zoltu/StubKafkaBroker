@@ -1,16 +1,10 @@
-apply plugin: 'com.zoltu.versioning'
-
 group 'com.zoltu'
-version versionInfo.toString()
 
 jar {
 	manifest {
 		attributes(
 				"Implementation-Title": "StubKafkaBroker",
-				"Implementation-Vendor": "Zoltu",
-				"Implementation-Version": versionInfo.toString(),
-				"Implementation-Sha": versionInfo.sha,
-				"Specification-Version": "${versionInfo.major}.${versionInfo.minor}".toString(),
+				"Implementation-Vendor": "Zoltu"
 		)
 	}
 }
