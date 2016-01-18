@@ -1,5 +1,7 @@
 package com.zoltu
 
+import com.zoltu.extensions.copyToArray
+import com.zoltu.extensions.groupBy
 import com.zoltu.extensions.toByteBuffer
 import com.zoltu.extensions.toScalaMap
 import com.zoltu.extensions.toScalaSeq
@@ -10,6 +12,8 @@ import kafka.api.TopicMetadata
 import kafka.api.TopicMetadataResponse
 import kafka.cluster.BrokerEndPoint
 import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.requests.ControlledShutdownRequest
 import org.apache.kafka.common.requests.DescribeGroupsRequest
@@ -33,40 +37,98 @@ import scala.Option
 import java.nio.ByteBuffer
 
 class StubKafkaBroker {
+	/**
+	 * The BrokerEndPoint of this kafka broker.  Contains useful information like its hostname and port.
+	 */
 	val thisBroker: BrokerEndPoint get() = BrokerEndPoint(0, lengthPrefixedMessageServer.host, lengthPrefixedMessageServer.port)
 
+	/**
+	 * The handler for metadata requests.
+	 *
+	 * Default behavior: automatically prime any topics specified in the request with this broker as the leader; respond with a all of the primed brokers/topics
+	 */
 	var metadataRequestHandler: (RequestHeader, MetadataRequest) -> TopicMetadataResponse = { requestHeader, metadataRequest ->
+		metadataRequest.topics().forEach { addTopic(Topic.createSimple(it, thisBroker)) }
 		TopicMetadataResponse(brokers.toScalaSeq(), topics.map { it.toTopicMetadata() }.toScalaSeq(), requestHeader.correlationId())
 	}
 
+	/**
+	 * The handler for produce requests.
+	 *
+	 * Default Behavior: track produced messages; ack a successful write to the supplied topic/partition with an offset of 0.
+	 */
 	var produceRequestHandler: (RequestHeader, ProduceRequest) -> ProducerResponse = { requestHeader, produceRequest ->
-		// TODO: keep track of all produced messages so tests can assert on them
-		ProducerResponse(requestHeader.correlationId(), mapOf<TopicAndPartition, ProducerResponseStatus>().toScalaMap(), requestHeader.apiVersion().toInt(), 0)
+		internalProducedMessages = internalProducedMessages.plus(ProducedMessage.create(produceRequest))
+		val responses = produceRequest
+				.partitionRecords()
+				.keys
+				.map { TopicAndPartition(it.topic(), it.partition()) }
+				.toMap { Pair(it, ProducerResponseStatus(0, 0)) }
+		ProducerResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
 	}
 
 	private val lengthPrefixedMessageServer = LengthPrefixedMessageServer { processRequest(it) }
 	private var brokers: Set<BrokerEndPoint> = setOf(thisBroker)
 	private var topics: Set<Topic> = emptySet()
+	private var internalProducedMessages = emptySequence<ProducedMessage>()
 
+	/**
+	 * All of the messages that have been produced by this broker (without topic/partition data)
+	 */
+	val producedMessages: Iterable<ByteArray?> get() = internalProducedMessages.map { it.message }.asIterable()
+
+	/**
+	 * All of the messages that have been produced to this broker, mapped by topics
+	 */
+	val producedMessagesByTopic: Map<String, List<ByteArray?>> get() = internalProducedMessages.groupBy({ it.topic }, { it.message })
+
+	/**
+	 * All of the messages that have been produced to this broker, mapped by topic and partition.
+	 */
+	val producedMessagesByTopicAndPartition: Map<String, Map<Int, List<ByteArray?>>> get() = internalProducedMessages.groupBy { it.topic }.mapValues { it.value.groupBy({ it.partition }, { it.message }) }
+
+	/**
+	 * Resets this broker to its default state.
+	 */
 	fun reset() {
 		clearBrokers()
 		clearTopics()
+		clearMessages()
 	}
 
+	/**
+	 * Adds a broker to the list of brokers this broker knows about.  Returned as part of metadata requests.
+	 */
 	fun addBroker(broker: BrokerEndPoint) {
 		brokers += broker
 	}
 
+	/**
+	 * Resets this broker to its default state where it only knows about itself.
+	 */
 	fun clearBrokers() {
 		brokers = setOf(thisBroker)
 	}
 
+	/**
+	 * Adds a topic to this broker.  Returned as part of metadata requests.
+	 */
 	fun addTopic(topic: Topic) {
 		topics += topic
 	}
 
+	/**
+	 * Clears all topics from this broker.
+	 */
 	fun clearTopics() {
 		topics = emptySet()
+	}
+
+	/**
+	 * Clears all messages produced to this broker.
+	 */
+	fun clearMessages() {
+		internalProducedMessages = emptySequence<ProducedMessage>()
 	}
 
 	private fun processRequest(byteBuffer: ByteBuffer): ByteBuffer {
@@ -95,6 +157,33 @@ class StubKafkaBroker {
 
 		companion object Factory {
 			fun createSimple(id: Int, leader: BrokerEndPoint) = Partition(id, leader, emptyArray(), emptyArray())
+		}
+	}
+
+	internal data class ProducedMessage(val topic: String, val partition: Int, val key: ByteArray?, val message: ByteArray?) {
+		companion object Factory {
+			internal fun create(produceRequest: ProduceRequest): Sequence<ProducedMessage> {
+				// make the generic arguments to `emptyMap` nonnull after https://youtrack.jetbrains.com/issue/KT-10697 is fixed
+				return (produceRequest.partitionRecords() ?: emptyMap<TopicPartition?, ByteBuffer?>())
+						.asSequence()
+						.mapNotNull map@ { topicAndPartitionToByteBufferMapEntry ->
+							val topicAndPartition = topicAndPartitionToByteBufferMapEntry.key ?: return@map null
+							val byteBuffer = topicAndPartitionToByteBufferMapEntry.value ?: return@map null
+							val topic = topicAndPartition.topic() ?: return@map null
+							object {
+								val topic = topic
+								val partition = topicAndPartition.partition()
+								val records = MemoryRecords.readableRecords(byteBuffer).asSequence().map { logEntry -> logEntry.record() }.filterNotNull()
+							}
+						}
+						.flatMap { topicPartitionRecords ->
+							topicPartitionRecords.records.mapNotNull map@ { record ->
+								val key = record.key()?.copyToArray()
+								val value = record.value()?.copyToArray()
+								ProducedMessage(topicPartitionRecords.topic, topicPartitionRecords.partition, key, value)
+							}
+						}
+			}
 		}
 	}
 }

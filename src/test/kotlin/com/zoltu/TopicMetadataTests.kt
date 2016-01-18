@@ -7,10 +7,11 @@ import org.jetbrains.spek.api.Spek
 import java.time.Duration
 import java.util.Properties
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class TopicMetadataTests : Spek() {
 	init {
-		given ("a stub kafka server with no priming") {
+		given ("no priming") {
 			val stubKafkaBroker = StubKafkaBroker()
 
 			on ("connect and list topics") {
@@ -32,9 +33,23 @@ class TopicMetadataTests : Spek() {
 					assert(topics2.size == 0)
 				}
 			}
+
+			on ("request metadata for specific topic") {
+				val kafkaProducer = getDefaultKafkaProducer(stubKafkaBroker.thisBroker.port())
+				val topicMetadata = kafkaProducer.partitionsFor("my topic")!!
+
+				it("should return the requested topic with one partition lead by this broker") {
+					assertEquals(1, topicMetadata.size)
+					val partitionInfo = topicMetadata.single()!!
+					assertEquals("my topic", partitionInfo.topic())
+					assertEquals(0, partitionInfo.partition())
+					assertEquals(stubKafkaBroker.thisBroker.host(), partitionInfo.leader().host())
+					assertEquals(stubKafkaBroker.thisBroker.port(), partitionInfo.leader().port())
+				}
+			}
 		}
 
-		given("a stub kafka server primed with one topic") {
+		given("primed with one topic") {
 			val stubKafkaBroker = StubKafkaBroker()
 			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
 
@@ -49,7 +64,7 @@ class TopicMetadataTests : Spek() {
 			}
 		}
 
-		given("a stub kafka server primed with one topic") {
+		given("primed with one topic") {
 			val stubKafkaBroker = StubKafkaBroker()
 			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
 
@@ -65,7 +80,7 @@ class TopicMetadataTests : Spek() {
 			}
 		}
 
-		given("a stub kafka server with a down broker primed and a topic primed with the down broker as primary") {
+		given("a down broker primed and a topic primed with the down broker as primary") {
 			val stubKafkaBroker = StubKafkaBroker()
 			val downBroker = BrokerEndPoint(1, "somewhere", 1234)
 			stubKafkaBroker.addBroker(downBroker)
@@ -89,7 +104,7 @@ class TopicMetadataTests : Spek() {
 			}
 		}
 
-		given("a stub kafka broker with a delayed response to MetadataRequest and a stub broker with a fast response") {
+		given("a delayed response to MetadataRequest and a stub broker with a fast response") {
 			val stubKafkaBrokerSlow = StubKafkaBroker()
 			val stubKafkaBrokerFast = StubKafkaBroker()
 			stubKafkaBrokerSlow.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBrokerFast.thisBroker))
@@ -101,7 +116,7 @@ class TopicMetadataTests : Spek() {
 			}
 
 			on("list topic") {
-				val properties = getDefaultProperties(0)
+				val properties = getDefaultConsumerProperties(0)
 				properties.put("bootstrap.servers", "localhost:${stubKafkaBrokerSlow.thisBroker.port()};localhost:${stubKafkaBrokerFast.thisBroker.port()}")
 				val kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
 				val topics = kafkaConsumer.listTopics()
@@ -111,23 +126,5 @@ class TopicMetadataTests : Spek() {
 				}
 			}
 		}
-	}
-
-	fun getDefaultProperties(port: Int): Properties {
-		val properties = Properties()
-		properties.put("bootstrap.servers", "localhost:$port")
-		// we want our tests to fail fast
-		properties.put("heartbeat.interval.ms", 100)
-		properties.put("fetch.max.wait.ms", 500)
-		properties.put("session.timeout.ms", 500)
-		properties.put("request.timeout.ms", 1000)
-		return properties
-	}
-
-	fun getDefaultKafkaConsumer(port: Int): KafkaConsumer<ByteArray, ByteArray> {
-		val properties = getDefaultProperties(port)
-		val keyDeserializer = ByteArrayDeserializer()
-		val messageDeserializer = ByteArrayDeserializer()
-		return KafkaConsumer<ByteArray, ByteArray>(properties, keyDeserializer, messageDeserializer)
 	}
 }
