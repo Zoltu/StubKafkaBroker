@@ -163,8 +163,7 @@ class StubKafkaBroker {
 	internal data class ProducedMessage(val topic: String, val partition: Int, val key: ByteArray?, val message: ByteArray?) {
 		companion object Factory {
 			internal fun create(produceRequest: ProduceRequest): Sequence<ProducedMessage> {
-				// make the generic arguments to `emptyMap` nonnull after https://youtrack.jetbrains.com/issue/KT-10697 is fixed
-				return (produceRequest.partitionRecords() ?: emptyMap<TopicPartition?, ByteBuffer?>())
+				return (produceRequest.partitionRecords() ?: emptyMap<TopicPartition, ByteBuffer>())
 						.asSequence()
 						.mapNotNull map@ { topicAndPartitionToByteBufferMapEntry ->
 							val topicAndPartition = topicAndPartitionToByteBufferMapEntry.key ?: return@map null
