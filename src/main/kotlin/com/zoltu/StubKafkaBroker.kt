@@ -3,15 +3,25 @@ package com.zoltu
 import com.zoltu.extensions.copyToArray
 import com.zoltu.extensions.groupBy
 import com.zoltu.extensions.toByteBuffer
+import com.zoltu.extensions.toScalaImmutableMap
 import com.zoltu.extensions.toScalaMap
 import com.zoltu.extensions.toScalaSeq
+import kafka.api.FetchResponse
+import kafka.api.FetchResponsePartitionData
+import kafka.api.GroupCoordinatorResponse
+import kafka.api.OffsetFetchResponse
 import kafka.api.PartitionMetadata
 import kafka.api.ProducerResponse
 import kafka.api.ProducerResponseStatus
 import kafka.api.TopicMetadata
 import kafka.api.TopicMetadataResponse
 import kafka.cluster.BrokerEndPoint
+import kafka.common.ErrorMapping
+import kafka.common.OffsetMetadata
+import kafka.common.OffsetMetadataAndError
 import kafka.common.TopicAndPartition
+import kafka.message.ByteBufferMessageSet
+import kafka.message.Message
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.AbstractRequest
@@ -60,11 +70,59 @@ class StubKafkaBroker {
 	var produceRequestHandler: (RequestHeader, ProduceRequest) -> ProducerResponse = { requestHeader, produceRequest ->
 		internalProducedMessages = internalProducedMessages.plus(ProducedMessage.create(produceRequest))
 		val responses = produceRequest
-				.partitionRecords()
+				.partitionRecords()!!
 				.keys
+				.filterNotNull()
 				.map { TopicAndPartition(it.topic(), it.partition()) }
 				.toMap { Pair(it, ProducerResponseStatus(0, 0)) }
 		ProducerResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
+	}
+
+	/**
+	 * The handler for fetch requests.
+	 *
+	 * Default Behavior: respond with all messages published to the requested topics/partitions, skipping up to the supplied offset
+	 */
+	var fetchRequestHandler: (RequestHeader, FetchRequest) -> FetchResponse = { requestHeader, fetchRequest ->
+		fun getTopicAndPartitionToPartitionDataMap(topic: String, partition: Int, startOffset: Int): Pair<TopicAndPartition, FetchResponsePartitionData> {
+			val topicAndPartition = TopicAndPartition(topic, partition)
+			val messages = producedMessagesByTopicAndPartition
+					.withDefault { emptyMap() }
+					.getOrImplicitDefault(topic)
+					.withDefault { emptyList() }
+					.getOrImplicitDefault(partition)
+					.drop(startOffset)
+					.filterNotNull()
+					.map { Message(it) }
+			val messageSet = ByteBufferMessageSet(messages.toScalaSeq())
+			val partitionMetadata = FetchResponsePartitionData(ErrorMapping.NoError(), messages.size.toLong() - 1, messageSet)
+			return Pair(topicAndPartition, partitionMetadata)
+		}
+
+		val responses = fetchRequest.fetchData().entries
+				.asSequence()
+				.filterNotNull()
+				.filter { it.key != null }
+				.filter { it.key!!.topic() != null }
+				.filter { it.value != null }
+				.toMap { getTopicAndPartitionToPartitionDataMap(it.key!!.topic()!!, it.key!!.partition(), it.value!!.offset.toInt()) }
+
+		FetchResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
+	}
+
+	val groupCoordinatorRequestHandler: (RequestHeader, GroupCoordinatorRequest) -> GroupCoordinatorResponse = { requestHeader, groupCoordinatorRequest ->
+		GroupCoordinatorResponse(Option.apply(thisBroker), 0, requestHeader.correlationId())
+	}
+
+	val offsetFetchRequestHandler: (RequestHeader, OffsetFetchRequest) -> OffsetFetchResponse = { requestHeader, offsetFetchRequest ->
+		fun toPair(topicPartition: TopicPartition): Pair<TopicAndPartition, OffsetMetadataAndError> {
+			val topicAndPartition = TopicAndPartition(topicPartition.topic(), topicPartition.partition())
+			val offsetMetadataAndError = OffsetMetadataAndError(OffsetMetadata(0, ""), 0)
+			return Pair(topicAndPartition, offsetMetadataAndError)
+		}
+
+		val topicPartitionToMetadataMap = offsetFetchRequest.partitions().toMap { topicPartition -> toPair(topicPartition) }
+		OffsetFetchResponse(topicPartitionToMetadataMap.toScalaImmutableMap(), requestHeader.correlationId())
 	}
 
 	private val lengthPrefixedMessageServer = LengthPrefixedMessageServer { processRequest(it) }
@@ -137,7 +195,10 @@ class StubKafkaBroker {
 		when (requestBody ) {
 			is MetadataRequest -> return metadataRequestHandler(requestHeader, requestBody).toByteBuffer()
 			is ProduceRequest -> return produceRequestHandler(requestHeader, requestBody).toByteBuffer()
-			is FetchRequest, is ListOffsetRequest, is LeaderAndIsrRequest, is StopReplicaRequest, is ControlledShutdownRequest, is UpdateMetadataRequest, is OffsetCommitRequest, is OffsetFetchRequest, is GroupCoordinatorRequest, is JoinGroupRequest, is HeartbeatRequest, is LeaveGroupRequest, is SyncGroupRequest, is DescribeGroupsRequest, is ListGroupsRequest -> {
+			is FetchRequest -> return fetchRequestHandler(requestHeader, requestBody).toByteBuffer()
+			is GroupCoordinatorRequest -> return groupCoordinatorRequestHandler(requestHeader, requestBody).toByteBuffer()
+			is OffsetFetchRequest -> return offsetFetchRequestHandler(requestHeader, requestBody).toByteBuffer()
+			is ListOffsetRequest, is LeaderAndIsrRequest, is StopReplicaRequest, is ControlledShutdownRequest, is UpdateMetadataRequest, is OffsetCommitRequest, is JoinGroupRequest, is HeartbeatRequest, is LeaveGroupRequest, is SyncGroupRequest, is DescribeGroupsRequest, is ListGroupsRequest -> {
 				throw UnsupportedOperationException("Unhandled request type.")
 			}
 			else -> throw UnsupportedOperationException("Unhandled request type.")

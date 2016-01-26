@@ -13,7 +13,7 @@ fun getDefaultConsumerProperties(port: Int): Properties {
 	properties.put("heartbeat.interval.ms", 100)
 	properties.put("fetch.max.wait.ms", 500)
 	properties.put("session.timeout.ms", 500)
-	properties.put("request.timeout.ms", 1000)
+	properties.put("request.timeout.ms", 10000)
 	return properties
 }
 
