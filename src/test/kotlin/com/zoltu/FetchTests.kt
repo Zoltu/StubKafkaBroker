@@ -35,8 +35,7 @@ class FetchTests : Spek() {
 			on("fetch") {
 				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 				kafkaConsumer.assign(listOf(TopicPartition("my topic", 0)))
-				val foo = kafkaConsumer.poll(Duration.ofMinutes(1000).toMillis())
-				val consumerRecords = foo.records("my topic")
+				val consumerRecords = kafkaConsumer.poll(Duration.ofMinutes(1000).toMillis()).records("my topic")
 
 				it("is not null") {
 					assertNotNull(consumerRecords)

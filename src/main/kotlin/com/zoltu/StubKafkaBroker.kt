@@ -21,7 +21,10 @@ import kafka.common.OffsetMetadata
 import kafka.common.OffsetMetadataAndError
 import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
+import kafka.message.CompressionCodec
 import kafka.message.Message
+import kafka.message.NoCompressionCodec
+import kafka.message.`NoCompressionCodec$`
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.AbstractRequest
@@ -45,6 +48,7 @@ import org.apache.kafka.common.requests.SyncGroupRequest
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import scala.Option
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicLong
 
 class StubKafkaBroker {
 	/**
@@ -84,17 +88,17 @@ class StubKafkaBroker {
 	 * Default Behavior: respond with all messages published to the requested topics/partitions, skipping up to the supplied offset
 	 */
 	var fetchRequestHandler: (RequestHeader, FetchRequest) -> FetchResponse = { requestHeader, fetchRequest ->
-		fun getTopicAndPartitionToPartitionDataMap(topic: String, partition: Int, startOffset: Int): Pair<TopicAndPartition, FetchResponsePartitionData> {
+		fun getTopicAndPartitionToPartitionDataMap(topic: String, partition: Int, startOffset: Long): Pair<TopicAndPartition, FetchResponsePartitionData> {
 			val topicAndPartition = TopicAndPartition(topic, partition)
 			val messages = producedMessagesByTopicAndPartition
 					.withDefault { emptyMap() }
 					.getOrImplicitDefault(topic)
 					.withDefault { emptyList() }
 					.getOrImplicitDefault(partition)
-					.drop(startOffset)
+					.drop(startOffset.toInt())
 					.filterNotNull()
 					.map { Message(it) }
-			val messageSet = ByteBufferMessageSet(messages.toScalaSeq())
+			val messageSet = ByteBufferMessageSet(`NoCompressionCodec$`.`MODULE$`, AtomicLong(startOffset.toLong()), messages.toScalaSeq())
 			val partitionMetadata = FetchResponsePartitionData(ErrorMapping.NoError(), messages.size.toLong() - 1, messageSet)
 			return Pair(topicAndPartition, partitionMetadata)
 		}
@@ -105,7 +109,7 @@ class StubKafkaBroker {
 				.filter { it.key != null }
 				.filter { it.key!!.topic() != null }
 				.filter { it.value != null }
-				.toMap { getTopicAndPartitionToPartitionDataMap(it.key!!.topic()!!, it.key!!.partition(), it.value!!.offset.toInt()) }
+				.toMap { getTopicAndPartitionToPartitionDataMap(it.key!!.topic()!!, it.key!!.partition(), it.value!!.offset) }
 
 		FetchResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
 	}
