@@ -4,6 +4,8 @@
 # StubKafkaBroker
 A stub Kafka Broker that speaks the Kafka wire protocol.
 
+At the moment, the broker supports Metadata, Fetch, Produce, GroupCoordinator and OffsetFetch requests with reasonable defaults for each.  This is enough to support simple production/consumption via the official 0.9 Kafka-Client but not enough to support the group management features of Kafka (so you have to specify the partition you want to produce to/consume from).
+
 ## Usage
 ### Gradle
 ```groovy
