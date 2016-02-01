@@ -42,6 +42,8 @@ dependencies {
 TODO: It is basically the same as Kotlin but more verbose
 
 ### Kotlin
+See the [tests](https://github.com/Zoltu/StubKafkaBroker/tree/master/src/test/kotlin/com/zoltu) for more examples of how to assert on various actions (like production and consumption).
+
 ```kotlin
 // instatiate the server, this will start up the server and cause it to start listening on a random open port
 val stubKafkaBroker = StubKafkaBroker()
