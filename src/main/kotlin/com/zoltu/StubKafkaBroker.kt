@@ -21,9 +21,7 @@ import kafka.common.OffsetMetadata
 import kafka.common.OffsetMetadataAndError
 import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
-import kafka.message.CompressionCodec
 import kafka.message.Message
-import kafka.message.NoCompressionCodec
 import kafka.message.`NoCompressionCodec$`
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
@@ -78,7 +76,7 @@ class StubKafkaBroker {
 				.keys
 				.filterNotNull()
 				.map { TopicAndPartition(it.topic(), it.partition()) }
-				.toMap { Pair(it, ProducerResponseStatus(0, 0)) }
+				.associateBy({ it }, { ProducerResponseStatus(0, 0) })
 		ProducerResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
 	}
 
@@ -91,10 +89,8 @@ class StubKafkaBroker {
 		fun getTopicAndPartitionToPartitionDataMap(topic: String, partition: Int, startOffset: Long): Pair<TopicAndPartition, FetchResponsePartitionData> {
 			val topicAndPartition = TopicAndPartition(topic, partition)
 			val messages = producedMessagesByTopicAndPartition
-					.withDefault { emptyMap() }
-					.getOrImplicitDefault(topic)
-					.withDefault { emptyList() }
-					.getOrImplicitDefault(partition)
+					.getOrElse(topic, { emptyMap() })
+					.getOrElse(partition, { emptyList() })
 					.drop(startOffset.toInt())
 					.filterNotNull()
 					.map { Message(it) }
@@ -109,7 +105,7 @@ class StubKafkaBroker {
 				.filter { it.key != null }
 				.filter { it.key!!.topic() != null }
 				.filter { it.value != null }
-				.toMap { getTopicAndPartitionToPartitionDataMap(it.key!!.topic()!!, it.key!!.partition(), it.value!!.offset) }
+				.associate { getTopicAndPartitionToPartitionDataMap(it.key!!.topic()!!, it.key!!.partition(), it.value!!.offset) }
 
 		FetchResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
 	}
@@ -119,13 +115,7 @@ class StubKafkaBroker {
 	}
 
 	val offsetFetchRequestHandler: (RequestHeader, OffsetFetchRequest) -> OffsetFetchResponse = { requestHeader, offsetFetchRequest ->
-		fun toPair(topicPartition: TopicPartition): Pair<TopicAndPartition, OffsetMetadataAndError> {
-			val topicAndPartition = TopicAndPartition(topicPartition.topic(), topicPartition.partition())
-			val offsetMetadataAndError = OffsetMetadataAndError(OffsetMetadata(0, ""), 0)
-			return Pair(topicAndPartition, offsetMetadataAndError)
-		}
-
-		val topicPartitionToMetadataMap = offsetFetchRequest.partitions().toMap { topicPartition -> toPair(topicPartition) }
+		val topicPartitionToMetadataMap = offsetFetchRequest.partitions().associateBy({ TopicAndPartition(it.topic(), it.partition()) }, { OffsetMetadataAndError(OffsetMetadata(0, ""), 0) })
 		OffsetFetchResponse(topicPartitionToMetadataMap.toScalaImmutableMap(), requestHeader.correlationId())
 	}
 
@@ -228,8 +218,7 @@ class StubKafkaBroker {
 	internal data class ProducedMessage(val topic: String, val partition: Int, val key: ByteArray?, val message: ByteArray?) {
 		companion object Factory {
 			internal fun create(produceRequest: ProduceRequest): Sequence<ProducedMessage> {
-				return (produceRequest.partitionRecords() ?: emptyMap<TopicPartition, ByteBuffer>())
-						.asSequence()
+				return (produceRequest.partitionRecords() ?: emptyMap<TopicPartition?, ByteBuffer?>()).asSequence()
 						.mapNotNull map@ { topicAndPartitionToByteBufferMapEntry ->
 							val topicAndPartition = topicAndPartitionToByteBufferMapEntry.key ?: return@map null
 							val byteBuffer = topicAndPartitionToByteBufferMapEntry.value ?: return@map null

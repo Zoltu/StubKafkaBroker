@@ -25,7 +25,7 @@ private class InMemoryGatheringByteChannel() : GatheringByteChannel {
 	private var bytes = emptySequence<Byte>()
 
 	fun toByteBuffer(offset: Int): ByteBuffer {
-		val result = ByteBuffer.wrap(bytes.drop(offset).toArrayList().toByteArray())
+		val result = ByteBuffer.wrap(bytes.drop(offset).toList().toByteArray())
 		result.position(result.limit())
 		return result
 	}
