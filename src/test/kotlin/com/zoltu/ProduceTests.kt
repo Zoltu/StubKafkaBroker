@@ -23,9 +23,11 @@ class ProduceTests : Spek() {
 				}
 
 				it("contains the produced message as part of its produces") {
-					assertNull(stubKafkaBroker.producedMessages.first())
-					assertNull(stubKafkaBroker.producedMessagesByTopic.get("my topic")!!.first())
-					assertNull(stubKafkaBroker.producedMessagesByTopicAndPartition.get("my topic")!!.get(0)!!.first())
+					val producedMessages = stubKafkaBroker.getProducedMessages("my topic", 0)
+					assertEquals(1, producedMessages.size)
+					val producedMessage = producedMessages.first()
+					assertNull(producedMessage.key)
+					assertNull(producedMessage.message)
 				}
 			}
 		}
@@ -41,8 +43,10 @@ class ProduceTests : Spek() {
 				kafkaProducer.send(ProducerRecord("my topic", "bar".toByteArray())).get()!!
 
 				it("contains the produced messages") {
-					assertEquals("foo", stubKafkaBroker.producedMessagesByTopic["my topic"]?.first()?.toString(Charsets.UTF_8))
-					assertEquals("bar", stubKafkaBroker.producedMessagesByTopic["my topic"]?.last()?.toString(Charsets.UTF_8))
+					val producedMessages = stubKafkaBroker.getProducedMessages("my topic", 0)
+					assertEquals(2, producedMessages.size)
+					assertEquals("foo", producedMessages.first().message?.toString(Charsets.UTF_8))
+					assertEquals("bar", producedMessages.last().message?.toString(Charsets.UTF_8))
 				}
 			}
 		}

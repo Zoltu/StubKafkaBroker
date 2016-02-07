@@ -1,35 +1,27 @@
 package com.zoltu
 
 import com.zoltu.extensions.copyToArray
-import com.zoltu.extensions.groupBy
 import com.zoltu.extensions.toByteBuffer
 import com.zoltu.extensions.toResponseByteBuffer
 import com.zoltu.extensions.toScalaImmutableMap
-import com.zoltu.extensions.toScalaMap
 import com.zoltu.extensions.toScalaSeq
-import kafka.api.FetchResponse
-import kafka.api.FetchResponsePartitionData
 import kafka.api.GroupCoordinatorResponse
 import kafka.api.OffsetFetchResponse
 import kafka.api.PartitionMetadata
-import kafka.api.ProducerResponse
-import kafka.api.ProducerResponseStatus
 import kafka.api.TopicMetadata
 import kafka.api.TopicMetadataResponse
 import kafka.cluster.BrokerEndPoint
-import kafka.common.ErrorMapping
 import kafka.common.OffsetMetadata
 import kafka.common.OffsetMetadataAndError
 import kafka.common.TopicAndPartition
-import kafka.message.ByteBufferMessageSet
-import kafka.message.Message
-import kafka.message.`NoCompressionCodec$`
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.requests.ControlledShutdownRequest
 import org.apache.kafka.common.requests.DescribeGroupsRequest
 import org.apache.kafka.common.requests.FetchRequest
+import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.requests.GroupCoordinatorRequest
 import org.apache.kafka.common.requests.HeartbeatRequest
 import org.apache.kafka.common.requests.HeartbeatResponse
@@ -45,6 +37,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest
 import org.apache.kafka.common.requests.OffsetCommitResponse
 import org.apache.kafka.common.requests.OffsetFetchRequest
 import org.apache.kafka.common.requests.ProduceRequest
+import org.apache.kafka.common.requests.ProduceResponse
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.StopReplicaRequest
 import org.apache.kafka.common.requests.SyncGroupRequest
@@ -52,7 +45,9 @@ import org.apache.kafka.common.requests.SyncGroupResponse
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import scala.Option
 import java.nio.ByteBuffer
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 class StubKafkaBroker {
 	/**
@@ -75,15 +70,35 @@ class StubKafkaBroker {
 	 *
 	 * Default Behavior: track produced messages; ack a successful write to the supplied topic/partition with an offset of 0.
 	 */
-	var produceRequestHandler: (RequestHeader, ProduceRequest) -> ProducerResponse = { requestHeader, produceRequest ->
-		internalProducedMessages = internalProducedMessages.plus(ProducedMessage.create(produceRequest))
-		val responses = produceRequest
-				.partitionRecords()!!
-				.keys
+	var produceRequestHandler: (RequestHeader, ProduceRequest) -> ProduceResponse = { requestHeader, produceRequest ->
+		fun toPartitionResponse(topic: String, partition: Int, byteBuffer: ByteBuffer): ProduceResponse.PartitionResponse {
+			val newRecords = MemoryRecords.readableRecords(byteBuffer)
+					.asSequence()
+					.map { logEntry -> logEntry.record() }
+					.filterNotNull()
+					.toList()
+
+			val allRecords = internalProducedMessages
+					.computeIfAbsent(topic, { ConcurrentHashMap() })
+					.computeIfAbsent(partition, { CopyOnWriteArrayList() });
+
+			// FIXME: race condition here! another thread could add records after we get the size and before we add the new records
+			val baseOffset = allRecords.size
+			allRecords.addAll(newRecords)
+
+			return ProduceResponse.PartitionResponse(0, baseOffset.toLong())
+		}
+
+		val responses = produceRequest.partitionRecords()!!.entries
 				.filterNotNull()
-				.map { TopicAndPartition(it.topic(), it.partition()) }
-				.associateBy({ it }, { ProducerResponseStatus(0, 0) })
-		ProducerResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
+				.filter { it.key != null }
+				.filter { it.key.topic() != null }
+				.filter { it.value != null }
+				.associateBy({ it.key }, { toPartitionResponse(it.key.topic(), it.key.partition(), it.value) })
+		if (requestHeader.apiVersion() == 0.toShort())
+			ProduceResponse(responses)
+		else
+			ProduceResponse(responses, 0)
 	}
 
 	/**
@@ -92,28 +107,34 @@ class StubKafkaBroker {
 	 * Default Behavior: respond with all messages published to the requested topics/partitions, skipping up to the supplied offset
 	 */
 	var fetchRequestHandler: (RequestHeader, FetchRequest) -> FetchResponse = { requestHeader, fetchRequest ->
-		fun getTopicAndPartitionToPartitionDataMap(topic: String, partition: Int, startOffset: Long): Pair<TopicAndPartition, FetchResponsePartitionData> {
-			val topicAndPartition = TopicAndPartition(topic, partition)
-			val messages = producedMessagesByTopicAndPartition
-					.getOrElse(topic, { emptyMap() })
-					.getOrElse(partition, { emptyList() })
+		fun toPartitionData(topic: String, partition: Int, startOffset: Long): FetchResponse.PartitionData {
+			val messages = internalProducedMessages
+					.getOrElse(topic, { ConcurrentHashMap() })
+					.getOrElse(partition, { CopyOnWriteArrayList() })
 					.drop(startOffset.toInt())
-					.filterNotNull()
-					.map { Message(it) }
-			val messageSet = ByteBufferMessageSet(`NoCompressionCodec$`.`MODULE$`, AtomicLong(startOffset.toLong()), messages.toScalaSeq())
-			val partitionMetadata = FetchResponsePartitionData(ErrorMapping.NoError(), messages.size.toLong() - 1, messageSet)
-			return Pair(topicAndPartition, partitionMetadata)
+					.filterNotNull();
+
+			val memoryRecords = MemoryRecords.emptyRecords(ByteBuffer.allocate(0), CompressionType.NONE)
+			messages.forEachIndexed { i, record ->
+				memoryRecords.append(i.toLong() + startOffset, record)
+			}
+			memoryRecords.close()
+
+			return FetchResponse.PartitionData(0, messages.size.toLong(), memoryRecords.buffer())
 		}
 
 		val responses = fetchRequest.fetchData().entries
 				.asSequence()
 				.filterNotNull()
 				.filter { it.key != null }
-				.filter { it.key!!.topic() != null }
 				.filter { it.value != null }
-				.associate { getTopicAndPartitionToPartitionDataMap(it.key!!.topic()!!, it.key!!.partition(), it.value!!.offset) }
+				.filter { it.key.topic() != null }
+				.associateBy({ it.key }, { toPartitionData(it.key.topic(), it.key.partition(), it.value.offset) });
 
-		FetchResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
+		if (requestHeader.apiVersion() == 0.toShort())
+			FetchResponse(responses)
+		else
+			FetchResponse(responses, 0)
 	}
 
 	/**
@@ -159,7 +180,7 @@ class StubKafkaBroker {
 	 */
 	val syncGroupRequestHandler: (RequestHeader, SyncGroupRequest) -> SyncGroupResponse = handler@ { requestHeader, syncGroupRequest ->
 		val errorCode = 0.toShort()
-		val memberState = syncGroupRequest.groupAssignment()!!.get(syncGroupRequest.memberId()) ?: return@handler SyncGroupResponse(25, ByteBuffer.allocate(0))
+		val memberState = syncGroupRequest.groupAssignment()!![syncGroupRequest.memberId()] ?: return@handler SyncGroupResponse(25, ByteBuffer.allocate(0))
 		SyncGroupResponse(errorCode, memberState)
 	}
 
@@ -193,22 +214,16 @@ class StubKafkaBroker {
 	private val lengthPrefixedMessageServer = LengthPrefixedMessageServer { processRequest(it) }
 	private var brokers: Set<BrokerEndPoint> = setOf(thisBroker)
 	private var topics: Set<Topic> = emptySet()
-	private var internalProducedMessages = emptySequence<ProducedMessage>()
+	private var internalProducedMessages = ConcurrentHashMap<String, ConcurrentMap<Int, CopyOnWriteArrayList<Record>>>()
 
 	/**
-	 * All of the messages that have been produced by this broker (without topic/partition data)
+	 * All of the messages that have been produced to this broker for the given topic/partition.  The indexes are the offsets.
 	 */
-	val producedMessages: Iterable<ByteArray?> get() = internalProducedMessages.map { it.message }.asIterable()
-
-	/**
-	 * All of the messages that have been produced to this broker, mapped by topics
-	 */
-	val producedMessagesByTopic: Map<String, List<ByteArray?>> get() = internalProducedMessages.groupBy({ it.topic }, { it.message })
-
-	/**
-	 * All of the messages that have been produced to this broker, mapped by topic and partition.
-	 */
-	val producedMessagesByTopicAndPartition: Map<String, Map<Int, List<ByteArray?>>> get() = internalProducedMessages.groupBy { it.topic }.mapValues { it.value.groupBy({ it.partition }, { it.message }) }
+	fun getProducedMessages(topic: String, partition: Int): List<KeyAndMessage> {
+		val topicMessages = internalProducedMessages[topic] as Map<Int, Collection<Record>>? ?: emptyMap()
+		val partitionMessages = topicMessages[partition] ?: emptyList()
+		return partitionMessages.map { KeyAndMessage(it.key()?.copyToArray(), it.value()?.copyToArray())}
+	}
 
 	/**
 	 * Resets this broker to its default state.
@@ -251,7 +266,7 @@ class StubKafkaBroker {
 	 * Clears all messages produced to this broker.
 	 */
 	fun clearMessages() {
-		internalProducedMessages = emptySequence<ProducedMessage>()
+		internalProducedMessages = ConcurrentHashMap<String, ConcurrentMap<Int, CopyOnWriteArrayList<Record>>>()
 	}
 
 	private fun processRequest(byteBuffer: ByteBuffer): ByteBuffer {
@@ -259,8 +274,8 @@ class StubKafkaBroker {
 		val requestBody = AbstractRequest.getRequest(requestHeader.apiKey().toInt(), requestHeader.apiVersion().toInt(), byteBuffer)
 		when (requestBody ) {
 			is MetadataRequest -> return metadataRequestHandler(requestHeader, requestBody).toByteBuffer()
-			is ProduceRequest -> return produceRequestHandler(requestHeader, requestBody).toByteBuffer()
-			is FetchRequest -> return fetchRequestHandler(requestHeader, requestBody).toByteBuffer()
+			is ProduceRequest -> return produceRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
+			is FetchRequest -> return fetchRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
 			is GroupCoordinatorRequest -> return groupCoordinatorRequestHandler(requestHeader, requestBody).toByteBuffer()
 			is OffsetFetchRequest -> return offsetFetchRequestHandler(requestHeader, requestBody).toByteBuffer()
 			is JoinGroupRequest -> return joinGroupRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
@@ -291,28 +306,5 @@ class StubKafkaBroker {
 		}
 	}
 
-	internal data class ProducedMessage(val topic: String, val partition: Int, val key: ByteArray?, val message: ByteArray?) {
-		companion object Factory {
-			internal fun create(produceRequest: ProduceRequest): Sequence<ProducedMessage> {
-				return (produceRequest.partitionRecords() ?: emptyMap<TopicPartition?, ByteBuffer?>()).asSequence()
-						.mapNotNull map@ { topicAndPartitionToByteBufferMapEntry ->
-							val topicAndPartition = topicAndPartitionToByteBufferMapEntry.key ?: return@map null
-							val byteBuffer = topicAndPartitionToByteBufferMapEntry.value ?: return@map null
-							val topic = topicAndPartition.topic() ?: return@map null
-							object {
-								val topic = topic
-								val partition = topicAndPartition.partition()
-								val records = MemoryRecords.readableRecords(byteBuffer).asSequence().map { logEntry -> logEntry.record() }.filterNotNull()
-							}
-						}
-						.flatMap { topicPartitionRecords ->
-							topicPartitionRecords.records.mapNotNull map@ { record ->
-								val key = record.key()?.copyToArray()
-								val value = record.value()?.copyToArray()
-								ProducedMessage(topicPartitionRecords.topic, topicPartitionRecords.partition, key, value)
-							}
-						}
-			}
-		}
-	}
+	data class KeyAndMessage(val key: ByteArray?, val message: ByteArray?)
 }
