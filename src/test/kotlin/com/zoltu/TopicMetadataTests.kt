@@ -1,13 +1,12 @@
 package com.zoltu
 
-import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.Node
+import org.apache.kafka.common.PartitionInfo
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.jetbrains.spek.api.Spek
 import java.time.Duration
-import java.util.Properties
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class TopicMetadataTests : Spek() {
 	init {
@@ -51,10 +50,9 @@ class TopicMetadataTests : Spek() {
 
 		given("primed with one topic") {
 			val stubKafkaBroker = StubKafkaBroker()
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 
 			on("list topics") {
-				//val kafkaConsumer = getDefaultKafkaConsumer(9092)
 				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 				val topics = kafkaConsumer.listTopics()
 
@@ -66,7 +64,7 @@ class TopicMetadataTests : Spek() {
 
 		given("primed with one topic") {
 			val stubKafkaBroker = StubKafkaBroker()
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 
 			on("reset") {
 				stubKafkaBroker.reset()
@@ -74,19 +72,18 @@ class TopicMetadataTests : Spek() {
 				it("forgets the topic") {
 					val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 					val topics = kafkaConsumer.listTopics()
-
-					assert(topics.size == 0)
+					assertEquals(0, topics.size)
 				}
 			}
 		}
 
 		given("a down broker primed and a topic primed with the down broker as primary") {
 			val stubKafkaBroker = StubKafkaBroker()
-			val downBroker = BrokerEndPoint(1, "somewhere", 1234)
+			val downBroker = Node(1, "somewhere", 1234)
 			stubKafkaBroker.addBroker(downBroker)
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic("my topic", arrayOf(StubKafkaBroker.Partition(1, downBroker, emptyArray(), emptyArray()))))
+			stubKafkaBroker.addPartition(PartitionInfo("my topic", 1, downBroker, emptyArray(), emptyArray()))
 
-			on("list topics multiple times") {
+			on("list topics") {
 				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
 				val topics = kafkaConsumer.listTopics()
 
@@ -107,8 +104,8 @@ class TopicMetadataTests : Spek() {
 		given("a delayed response to MetadataRequest and a stub broker with a fast response") {
 			val stubKafkaBrokerSlow = StubKafkaBroker()
 			val stubKafkaBrokerFast = StubKafkaBroker()
-			stubKafkaBrokerSlow.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBrokerFast.thisBroker))
-			stubKafkaBrokerFast.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBrokerSlow.thisBroker))
+			stubKafkaBrokerSlow.addTopic("my topic")
+			stubKafkaBrokerFast.addTopic("my topic")
 			val defaultMetadataRequestHandler = stubKafkaBrokerSlow.metadataRequestHandler
 			stubKafkaBrokerSlow.metadataRequestHandler = { requestHeader, metadataRequest ->
 				Thread.sleep(Duration.ofMillis(1100).toMillis())

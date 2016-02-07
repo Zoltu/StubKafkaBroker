@@ -60,14 +60,14 @@ val stubKafkaBroker = StubKafkaBroker()
 val port = stubKafkaBroker.thisBroker.port()
 
 // adding a topic will cause the default request handlers that respond with topic information to have this topic (like MetadataRequest)
-stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+stubKafkaBroker.addTopic("my topic")
 
 // create a new Kafka Consumer (using off-the-shelf Kafka client library)
 val properties = Properties()
-properties.put("bootstrap.servers", "localhost:$port")
+properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:$port")
 val kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
 
-// our kafka consumer can now make requests of the broker that we mocked out
+// our kafka consumer can now make requests of the broker that we stubbed out
 val topics = kafkaConsumer.listTopics()
 assertEquals("my topic", topics.entries.single().key)
 
@@ -82,8 +82,8 @@ stubKafkaBroker.metadataRequestHandler = { requestHeader, metadataRequest ->
 
 // try again with multiple brokers
 val stubKafkaBrokerFast = StubKafkaBroker()
-stubKafkaBrokerFast.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBrokerSlow.thisBroker))
-properties.put("bootstrap.servers", "localhost:${stubKafkaBroker.thisBroker.port()};localhost:${stubKafkaBrokerFast.thisBroker.port()}")
+stubKafkaBrokerFast.addTopic("my topic")
+properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:${stubKafkaBroker.thisBroker.port()};localhost:${stubKafkaBrokerFast.thisBroker.port()}")
 kafkaConsumer = KafkaConsumer<ByteArray, ByteArray>(properties, ByteArrayDeserializer(), ByteArrayDeserializer())
 // does not block, since the fast broker will respond rather quickly
 val topics = kafkaConsumer.listTopics()
