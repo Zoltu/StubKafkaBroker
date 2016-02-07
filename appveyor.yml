@@ -1,4 +1,7 @@
 skip_tags: true
+branches:
+  only:
+    - master
 
 cache:
   - C:\Users\appveyor\.gradle -> **\*.gradle
