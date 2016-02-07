@@ -1,15 +1,11 @@
 package com.zoltu
 
-import org.jetbrains.spek.api.Spek
+import org.junit.Test
+import kotlin.test.assertTrue
 
-class Playground: Spek() {
-	init {
-		given("arrange") {
-			on("act") {
-				it("assert") {
-
-				}
-			}
-		}
+class Playground {
+	@Test
+	fun `I wonder what this does…`() {
+		assertTrue(true)
 	}
 }
