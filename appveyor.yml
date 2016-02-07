@@ -1,3 +1,5 @@
+skip_tags: true
+
 cache:
   - C:\Users\appveyor\.gradle -> **\*.gradle
 
