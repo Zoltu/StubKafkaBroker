@@ -24,7 +24,7 @@ class GroupManagementTests : Spek() {
 
 		given("primed with topic and messages produced") {
 			val stubKafkaBroker = StubKafkaBroker()
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 			val kafkaProducer = getDefaultKafkaProducer(stubKafkaBroker.thisBroker.port())
 			kafkaProducer.send(ProducerRecord("my topic", "zip".toByteArray())).get()!!
 			kafkaProducer.send(ProducerRecord("my topic", "zap".toByteArray())).get()!!

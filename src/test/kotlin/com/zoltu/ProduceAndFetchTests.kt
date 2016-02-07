@@ -11,7 +11,7 @@ class ProduceAndFetchTests : Spek() {
 	init {
 		given("primed with topic") {
 			val stubKafkaBroker = StubKafkaBroker()
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 
 			on("alternating produce and fetch") {
 				val kafkaProducer = getDefaultKafkaProducer(stubKafkaBroker.thisBroker.port())

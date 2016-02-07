@@ -10,7 +10,7 @@ class ProduceTests : Spek() {
 		given("primed with topic") {
 			val stubKafkaBroker = StubKafkaBroker()
 			// we have to prime a topic or else the metadata requests will fail before any production is allowed by the client
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 
 			on("produce one null message") {
 				val kafkaProducer = getDefaultKafkaProducer(stubKafkaBroker.thisBroker.port())
@@ -35,7 +35,7 @@ class ProduceTests : Spek() {
 		given("primed with topic") {
 			val stubKafkaBroker = StubKafkaBroker()
 			// we have to prime a topic or else the metadata requests will fail before any production is allowed by the client
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 
 			on("produce two string message") {
 				val kafkaProducer = getDefaultKafkaProducer(stubKafkaBroker.thisBroker.port())

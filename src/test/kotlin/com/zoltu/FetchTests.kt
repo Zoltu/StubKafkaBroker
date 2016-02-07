@@ -11,7 +11,7 @@ class FetchTests : Spek() {
 	init {
 		given("primed with topic") {
 			val stubKafkaBroker = StubKafkaBroker()
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 
 			on("fetch") {
 				val kafkaConsumer = getDefaultKafkaConsumer(stubKafkaBroker.thisBroker.port())
@@ -27,7 +27,7 @@ class FetchTests : Spek() {
 
 		given("primed with topic with messages") {
 			val stubKafkaBroker = StubKafkaBroker()
-			stubKafkaBroker.addTopic(StubKafkaBroker.Topic.createSimple("my topic", stubKafkaBroker.thisBroker))
+			stubKafkaBroker.addTopic("my topic")
 			val kafkaProducer = getDefaultKafkaProducer(stubKafkaBroker.thisBroker.port())
 			kafkaProducer.send(ProducerRecord("my topic", "foo".toByteArray(Charsets.UTF_8)))
 			kafkaProducer.send(ProducerRecord("my topic", "bar".toByteArray(Charsets.UTF_8))).get()!!
