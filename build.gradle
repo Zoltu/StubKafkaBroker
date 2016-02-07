@@ -11,6 +11,12 @@ apply plugin: 'kotlin'
 apply from: 'package.gradle'
 apply from: 'publish.gradle'
 
+// un-set the java and resources source directories since this is a pure kotlin project and gradle complains when they are missing
+sourceSets.main.java.srcDirs = []
+sourceSets.main.resources.srcDirs = []
+sourceSets.test.java.srcDirs = []
+sourceSets.test.resources.srcDirs = []
+
 repositories {
 	mavenCentral()
 	jcenter()
