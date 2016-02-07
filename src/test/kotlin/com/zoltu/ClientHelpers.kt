@@ -1,19 +1,22 @@
 package com.zoltu
 
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import java.util.Properties
 
 fun getDefaultConsumerProperties(port: Int): Properties {
 	val properties = Properties()
-	properties.put("bootstrap.servers", "localhost:$port")
+	properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:$port")
+	properties.put(ConsumerConfig.GROUP_ID_CONFIG, "my group")
 	// we want our tests to fail fast
-	properties.put("heartbeat.interval.ms", 100)
-	properties.put("fetch.max.wait.ms", 500)
-	properties.put("session.timeout.ms", 500)
-	properties.put("request.timeout.ms", 1000)
+	properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100)
+	properties.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 500)
+	properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 500)
+	properties.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1000)
 	return properties
 }
 
@@ -26,7 +29,7 @@ fun getDefaultKafkaConsumer(port: Int): KafkaConsumer<ByteArray, ByteArray> {
 
 fun getDefaultProducerProperties(port: Int): Properties {
 	val properties = Properties()
-	properties.put("bootstrap.servers", "localhost:$port")
+	properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:$port")
 	return properties
 }
 

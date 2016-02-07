@@ -3,8 +3,20 @@ package com.zoltu.extensions
 import kafka.api.FetchResponse
 import kafka.api.FetchResponseSend
 import kafka.api.RequestOrResponse
+import org.apache.kafka.common.requests.AbstractRequestResponse
+import org.apache.kafka.common.requests.ResponseHeader
 import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
+
+fun AbstractRequestResponse.toResponseByteBuffer(correlationId: Int): ByteBuffer {
+	val responseHeader = ResponseHeader(correlationId).toStruct()!!
+	val responseBody = this.toStruct()!!
+	val length = responseHeader.sizeOf() + responseBody.sizeOf()
+	val byteBuffer = ByteBuffer.wrap(ByteArray(length))
+	responseHeader.writeTo(byteBuffer)
+	responseBody.writeTo(byteBuffer)
+	return byteBuffer
+}
 
 fun RequestOrResponse.toByteBuffer(): ByteBuffer {
 	return toByteBuffer(this.sizeInBytes(), { byteBuffer -> this.writeTo(byteBuffer) })

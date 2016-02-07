@@ -3,6 +3,7 @@ package com.zoltu
 import com.zoltu.extensions.copyToArray
 import com.zoltu.extensions.groupBy
 import com.zoltu.extensions.toByteBuffer
+import com.zoltu.extensions.toResponseByteBuffer
 import com.zoltu.extensions.toScalaImmutableMap
 import com.zoltu.extensions.toScalaMap
 import com.zoltu.extensions.toScalaSeq
@@ -31,18 +32,23 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.GroupCoordinatorRequest
 import org.apache.kafka.common.requests.HeartbeatRequest
+import org.apache.kafka.common.requests.HeartbeatResponse
 import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.requests.JoinGroupResponse
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.requests.LeaveGroupRequest
+import org.apache.kafka.common.requests.LeaveGroupResponse
 import org.apache.kafka.common.requests.ListGroupsRequest
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.requests.OffsetCommitRequest
+import org.apache.kafka.common.requests.OffsetCommitResponse
 import org.apache.kafka.common.requests.OffsetFetchRequest
 import org.apache.kafka.common.requests.ProduceRequest
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.StopReplicaRequest
 import org.apache.kafka.common.requests.SyncGroupRequest
+import org.apache.kafka.common.requests.SyncGroupResponse
 import org.apache.kafka.common.requests.UpdateMetadataRequest
 import scala.Option
 import java.nio.ByteBuffer
@@ -110,13 +116,78 @@ class StubKafkaBroker {
 		FetchResponse(requestHeader.correlationId(), responses.toScalaMap(), requestHeader.apiVersion().toInt(), 0)
 	}
 
+	/**
+	 * The handler for group coordinator requests.
+	 *
+	 * Default Behavior: respond with this broker as the coordinator.
+	 */
 	val groupCoordinatorRequestHandler: (RequestHeader, GroupCoordinatorRequest) -> GroupCoordinatorResponse = { requestHeader, groupCoordinatorRequest ->
 		GroupCoordinatorResponse(Option.apply(thisBroker), 0, requestHeader.correlationId())
 	}
 
+	/**
+	 * The handler for offset fetch requests.
+	 *
+	 * Default Behavior: respond with all requested topics and partitions currently at offset 0
+	 */
 	val offsetFetchRequestHandler: (RequestHeader, OffsetFetchRequest) -> OffsetFetchResponse = { requestHeader, offsetFetchRequest ->
 		val topicPartitionToMetadataMap = offsetFetchRequest.partitions().associateBy({ TopicAndPartition(it.topic(), it.partition()) }, { OffsetMetadataAndError(OffsetMetadata(0, ""), 0) })
 		OffsetFetchResponse(topicPartitionToMetadataMap.toScalaImmutableMap(), requestHeader.correlationId())
+	}
+
+	/**
+	 * The handler for join group requests.
+	 *
+	 * Default Behavior: respond with the requestor as the group leader and the first protocol chosen
+	 */
+	val joinGroupRequestHandler: (RequestHeader, JoinGroupRequest) -> JoinGroupResponse = { requestHeader, joinGroupRequest ->
+		val chosenProtocol = joinGroupRequest.groupProtocols()!!.first()!!
+
+		val errorCode = 0.toShort()
+		val generationId = 0
+		val memberId = "member id"
+		val leaderId = "member id"
+		val groupProtocol = chosenProtocol.name()
+		val groupMembers = mapOf(Pair(memberId, chosenProtocol.metadata()!!))
+		JoinGroupResponse(errorCode, generationId, groupProtocol, memberId, leaderId, groupMembers)
+	}
+
+	/**
+	 * The handler for sync group requests.
+	 *
+	 * Default Behavior: Return whatever state the requestor provided for itself, or an UNKNOWN_MEMBER_ID if the requestor is not the leader.
+	 */
+	val syncGroupRequestHandler: (RequestHeader, SyncGroupRequest) -> SyncGroupResponse = handler@ { requestHeader, syncGroupRequest ->
+		val errorCode = 0.toShort()
+		val memberState = syncGroupRequest.groupAssignment()!!.get(syncGroupRequest.memberId()) ?: return@handler SyncGroupResponse(25, ByteBuffer.allocate(0))
+		SyncGroupResponse(errorCode, memberState)
+	}
+
+	/**
+	 * The handler for heartbeat requests.
+	 *
+	 * Default Behavior: Return success.
+	 */
+	val heartbeatRequestHandler: (RequestHeader, HeartbeatRequest) -> HeartbeatResponse = { requestHeader, heartbeatRequest ->
+		HeartbeatResponse(0)
+	}
+
+	/**
+	 * The handler for leave group requests.
+	 *
+	 * Default Behavior: Return success.
+	 */
+	val leaveGroupRequestHandler: (RequestHeader, LeaveGroupRequest) -> LeaveGroupResponse = { requestHeader, leaveGroupRequest ->
+		LeaveGroupResponse(0)
+	}
+
+	/**
+	 * The handler for offset commit requests.
+	 *
+	 * Default Behavior: Return success for all topics/partitions submitted.
+	 */
+	val offsetCommitRequestHandler: (RequestHeader, OffsetCommitRequest) -> OffsetCommitResponse = { requestHeader, offsetCommitRequest ->
+		OffsetCommitResponse(offsetCommitRequest.offsetData().keys.associateBy({ it }, { 0.toShort() }))
 	}
 
 	private val lengthPrefixedMessageServer = LengthPrefixedMessageServer { processRequest(it) }
@@ -192,7 +263,12 @@ class StubKafkaBroker {
 			is FetchRequest -> return fetchRequestHandler(requestHeader, requestBody).toByteBuffer()
 			is GroupCoordinatorRequest -> return groupCoordinatorRequestHandler(requestHeader, requestBody).toByteBuffer()
 			is OffsetFetchRequest -> return offsetFetchRequestHandler(requestHeader, requestBody).toByteBuffer()
-			is ListOffsetRequest, is LeaderAndIsrRequest, is StopReplicaRequest, is ControlledShutdownRequest, is UpdateMetadataRequest, is OffsetCommitRequest, is JoinGroupRequest, is HeartbeatRequest, is LeaveGroupRequest, is SyncGroupRequest, is DescribeGroupsRequest, is ListGroupsRequest -> {
+			is JoinGroupRequest -> return joinGroupRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
+			is SyncGroupRequest -> return syncGroupRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
+			is HeartbeatRequest -> return heartbeatRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
+			is LeaveGroupRequest -> return leaveGroupRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
+			is OffsetCommitRequest -> return offsetCommitRequestHandler(requestHeader, requestBody).toResponseByteBuffer(requestHeader.correlationId())
+			is ListOffsetRequest, is LeaderAndIsrRequest, is StopReplicaRequest, is ControlledShutdownRequest, is UpdateMetadataRequest, is DescribeGroupsRequest, is ListGroupsRequest -> {
 				throw UnsupportedOperationException("Unhandled request type.")
 			}
 			else -> throw UnsupportedOperationException("Unhandled request type.")

@@ -4,7 +4,15 @@
 # StubKafkaBroker
 A stub Kafka Broker that speaks the Kafka wire protocol.
 
-At the moment, the broker supports Metadata, Fetch, Produce, GroupCoordinator and OffsetFetch requests with reasonable defaults for each.  This is enough to support simple production/consumption via the official 0.9 Kafka-Client but not enough to support the group management features of Kafka (so you have to specify the partition you want to produce to/consume from).
+### What Works (using stub defaults)
+The following requests: Metadata, Produce, Fetch, OffsetFetch, OffsetCommit, GroupCoordinator, JoinGroup, SyncGroup, Heartbeat, LeaveGroup.
+
+This is enough to support simple (poll topic + partition) production/consumption as well as basic single-consumer group management (subscribe topic and poll).
+
+### What Doesn't Work (using stub defaults)
+The following requests: ListOffsetRequest, LeaderAndIsrRequest, StopReplicaRequest, ControlledShutdownRequest, UpdateMetadataRequest, DescribeGroupsRequest, ListGroupsRequest.  These are all administrative methods and generally aren't necessary for your average producer/consumer.
+
+Multi-consumer group management.  The default behavior is to have the broker ack (or similar) everything.  It doesn't actually track group state at the moment so if two consumers connect they won't actually be in a consumer group together.
 
 ## Usage
 ### Gradle
