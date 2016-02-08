@@ -20,7 +20,6 @@ sourceSets.test.resources.srcDirs = []
 repositories {
 	mavenCentral()
 	jcenter()
-	maven { url('http://repository.jetbrains.com/all') }
 	maven { url('https://dl.bintray.com/zoltu/maven/') }
 }
 
@@ -29,5 +28,5 @@ dependencies {
 	compile(group: 'org.apache.kafka', name: 'kafka-clients', version: '0.9.0.0')
 
 	testCompile(group: 'junit', name: 'junit', version: '4.12')
-	testCompile(group: 'org.jetbrains.spek', name: 'spek', version: '0.1.194')
+	testCompile(group: 'org.jetbrains.kotlin', name: 'kotlin-test', version: '1.0.0-rc-1036')
 }
