@@ -21,7 +21,7 @@ repositories {
 	jcenter()
 }
 dependencies {
-	compile(group: 'com.zoltu', name: 'StubKafkaBroker', version: '1.1.17')
+	compile(group: 'com.zoltu', name: 'StubKafkaBroker', version: '3.0.5')
 }
 ```
 *Note: You probably want to replace the version listed here with the latest version shown in the Build Status badge at the top of this readme.*
