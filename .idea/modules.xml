@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/StubKafkaBroker.iml" filepath="$PROJECT_DIR$/StubKafkaBroker.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/StubKafkaBroker.iml" filepath="$PROJECT_DIR$/.idea/modules/StubKafkaBroker.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/StubKafkaBroker_main.iml" filepath="$PROJECT_DIR$/.idea/modules/StubKafkaBroker_main.iml" group="StubKafkaBroker" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/StubKafkaBroker_test.iml" filepath="$PROJECT_DIR$/.idea/modules/StubKafkaBroker_test.iml" group="StubKafkaBroker" />
     </modules>
   </component>
 </project>
